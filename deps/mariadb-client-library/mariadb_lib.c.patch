@@ -1,5 +1,5 @@
 --- libmariadb/mariadb_lib.c	2019-09-03 12:48:10.000000000 +0000
-+++ /tmp/mariadb_lib.c	2020-05-20 05:12:53.192791956 +0000
++++ /tmp/mariadb_lib.c	2020-05-20 05:47:01.342940522 +0000
 @@ -140,6 +140,7 @@
  static void mysql_close_memory(MYSQL *mysql);
  void read_user_name(char *name);
@@ -146,8 +146,8 @@
 +        my_context_install_suspend_resume_hook(ctxt, my_suspend_hook, &hook_data);
 +    }
 +
-+    if (!mysql_real_connect(&tmp_mysql, mysql->host, mysql->user, mysql->passwd,
-+        mysql->db, mysql->port, mysql->unix_socket,
++    if (!mysql_real_connect(&tmp_mysql, host_str, user_str, mysql->passwd,
++        mysql->db, port, mysql->unix_socket,
 +        mysql->client_flag | CLIENT_REMEMBER_OPTIONS) ||
 +        mysql_set_character_set(&tmp_mysql, mysql->charset->csname, 0))
 +    {
