@@ -1,0 +1,54 @@
+#!/bin/bash
+
+SUBSCIRPTION_ID="2941a09d-7bcf-42fe-91ca-1765f521c829"
+RESOURCE_GROUP="etli-group"
+MASTER_NAME="etlik53master"
+REPLICA_NAME="etlik53replicadr1"
+USER_NAME="mysqlaas"
+PASSWORD="#Bugsfor$"
+
+MASTER_HOST="${MASTER_NAME}.mysql.database.azure.com"
+REPLICA_HOST="${REPLICA_NAME}.mysql.database.azure.com"
+
+echo "Checking the replication role for the master ${MASTER_NAME}."
+
+ROLE=$(az mysql server show --resource-group $RESOURCE_GROUP --name $MASTER_NAME | grep replicationRole | grep Master) > /dev/null 2>&1
+if test -z "${ROLE}"
+then
+    echo "Could not find the right replication role for  the master ${MASTER_NAME}."
+    exit 1
+fi
+
+echo "Checking the replication role for the replica ${REPLICA_NAME}."
+ROLE=$(az mysql server show --resource-group $RESOURCE_GROUP --name $REPLICA_NAME | grep replicationRole | grep Replica) > /dev/null 2>&1
+if test -z "${ROLE}"
+then
+    echo "Could not find the right replication role for the replica ${REPLICA_NAME}."
+    exit 1
+fi
+
+echo "Configurating the master server ${MASTER_NAME} to OFFLINE_SOFT."
+$(mysql -h127.0.0.1 -uadmin -padmin -P6032 -e"UPDATE mysql_servers SET status='OFFLINE_SOFT' WHERE hostname='${MASTER_HOST}';")
+$(mysql -h127.0.0.1 -uadmin -padmin -P6032 -e"LOAD MYSQL SERVERS TO RUNTIME;")
+
+
+echo "Promoting the replica server ${REPLICA_NAME}."
+az mysql server replica stop --resource-group $RESOURCE_GROUP --name $REPLICA_NAME --yes
+
+echo "Waiting for the replica's promotion."
+READ_ONLY_SERVER=1
+while [ $READ_ONLY_SERVER -eq 1 ]
+do
+    sleep 1
+
+    echo "."
+    READ_ONLY_SERVER=$(mysql -h"$REPLICA_HOST" -u"$USER_NAME"@"$REPLICA_NAME" -p"$PASSWORD" -e"select @@read_only;" -NB) > /dev/null 2>&1
+done
+
+echo "Reconfigurating the promoted replica into Write Group."
+$(mysql -h127.0.0.1 -uadmin -padmin -P6032 -e"INSERT INTO MYSQL_SERVERS(hostgroup_id,hostname,port,weight,use_ssl,comment) VALUES(1,'$REPLICA_NAME',3306,1,1,'Write Group');")
+$(mysql -h127.0.0.1 -uadmin -padmin -P6032 -e"LOAD MYSQL SERVERS TO RUNTIME;")
+$(mysql -h127.0.0.1 -uadmin -padmin -P6032 -e"SAVE MYSQL SERVERS TO DISK;")
+
+echo "Completed!"
+
